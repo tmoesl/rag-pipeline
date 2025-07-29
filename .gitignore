@@ -1,0 +1,62 @@
+# ====== Python Bytecode ===================
+__pycache__/
+*.py[cod]
+
+# ====== Virtual Environments ==============
+.venv/
+venv/
+env/
+ENV/
+
+# ====== Build Artifacts ===================
+build/
+dist/
+.eggs/
+*.egg-info/
+*.egg
+*.whl
+
+# ====== Docker Artifacts ==================
+*.tar
+*.img
+
+# ====== Logs and Runtime Files ============
+*.log
+*.pid
+*.db
+*.rdb
+
+# ====== Tool Caches =======================
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.cache/
+
+# ====== Editor/IDE Configs ================
+.vscode/
+.idea/
+*.code-workspace
+
+# ====== Jupyter Notebooks ================
+.ipynb_checkpoints/
+
+# ====== Environment Variables & Secrets ===
+.env
+.env.*
+credentials.json
+token.json
+!.env.sample
+
+# ====== Alembic Migrations ================
+app/alembic/versions/*
+!app/alembic/versions/.gitkeep
+
+# ====== OS-generated Files ================
+.DS_Store
+
+# ====== Vim Swap Files ====================
+*.swp
+*.swo
+
+# ====== Project/Workspace State ===========
+.cursor/
