@@ -2,6 +2,23 @@
 
 This directory contains configuration for a PostgreSQL database with pgvector extension to support vector similarity search for RAG (Retrieval Augmented Generation) applications.
 
+## Quick Start
+
+```bash
+# Start the database
+cd docker
+docker compose up -d
+
+# Verify it's running
+docker compose ps
+
+# Connect and test
+docker compose exec pgvector psql -U postgres -d vectordb
+
+# Shut down the database and clean volumes
+docker compose down [-v]
+```
+
 ## Schema Design
 
 The database uses a dedicated `rag` schema with two main tables:
@@ -14,8 +31,7 @@ Stores metadata about each source document:
 - `title`: Document title
 - `source`: Source location/identifier
 - `metadata`: JSONB field for flexible document attributes
-- `fts`: Full-text search vector for text search
-- Timestamps for tracking creation and updates
+- `created_at`, `updated_at`: Timestamps for tracking creation and updates
 
 ### Chunks Table
 
@@ -26,9 +42,9 @@ Stores actual document chunks with embeddings:
 - `content`: The actual text content of the chunk
 - `chunk_index`: Sequential ordering within parent document
 - `metadata`: JSONB field for chunk-specific attributes
-- `embedding`: 1536-dimensional vector for OpenAI embeddings
+- `embedding`: High-dimensional vector for OpenAI embeddings (dimensions rely on embedding model)
 - `fts`: Full-text search vector for text search
-- Timestamps for tracking creation and updates
+- `created_at`, `updated_at`: Timestamps for tracking creation and updates
 
 ## Search Capabilities
 
@@ -42,6 +58,7 @@ CREATE INDEX IF NOT EXISTS chunks_embedding_idx ON rag.chunks USING hnsw (embedd
 
 - `vector_ip_ops`: Uses dot product similarity, optimized for normalized embeddings like those from OpenAI
 - HNSW provides logarithmic search time complexity instead of linear
+- Supplement information can be found here: [Supabase (HNSW)](https://supabase.com/docs/guides/ai/vector-indexes/hnsw-indexes)
 
 ### Full-Text Search
 
@@ -74,4 +91,4 @@ The database runs in Docker with:
 - Persistent volume storage
 - Health checks
 - Resource limits
-- Automatic schema initialization 
+- Automatic schema initialization (`init.sql`)

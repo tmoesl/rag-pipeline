@@ -10,9 +10,6 @@ CREATE TABLE IF NOT EXISTS rag.documents (
     title TEXT NOT NULL,
     source TEXT NOT NULL,
     metadata JSONB,
-    fts TSVECTOR GENERATED ALWAYS AS (
-        to_tsvector('english', title || ' ' || source)
-    ) STORED,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -37,7 +34,6 @@ CREATE TABLE IF NOT EXISTS rag.chunks (
 CREATE INDEX IF NOT EXISTS chunks_embedding_idx ON rag.chunks USING hnsw (embedding vector_ip_ops);
 
 -- Full-text search indexes
-CREATE INDEX IF NOT EXISTS documents_fts_idx ON rag.documents USING GIN (fts);
 CREATE INDEX IF NOT EXISTS chunks_fts_idx ON rag.chunks USING GIN (fts);
 
 -- Create GIN indexes on metadata for efficient JSON queries

@@ -9,12 +9,17 @@ dependencies = [
     "ipykernel>=6.30.0",
     "numpy>=2.3.2",
     "openai>=1.97.1",
-    "pandas>=2.3.1",
     "pgvector>=0.4.1",
     "psycopg[binary]>=3.2.9",
     "pydantic>=2.11.7",
-    "pydantic-ai>=0.4.9",
     "python-dotenv>=1.1.1",
+    "tiktoken>=0.9.0",
+    "tqdm>=4.67.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.1",
 ]
 
 [tool.ruff]
