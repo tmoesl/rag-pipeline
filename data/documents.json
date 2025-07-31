@@ -1,0 +1,34 @@
+{
+  "documents": [
+    {
+      "source": "https://www.anthropic.com/news/contextual-retrieval",
+      "title": "Contextual Retrieval",
+      "metadata": {"author": "Anthropic", "category": "Research", "topic": "RAG", "type": "url"}
+    },
+    {
+      "source": "./data/docling_technical_report.pdf",
+      "title": "Docling Technical Report",
+      "metadata": {"author": "IBM Research", "category": "Python Library", "topic": "Document Processing", "type": "pdf"}
+    },
+    {
+      "source": "https://www.anthropic.com/engineering/building-effective-agents",
+      "title": "Building Effective Agents",
+      "metadata": {"author": "Anthropic", "category": "Research", "topic": "Agents", "type": "url"}
+    },
+    {
+      "source": "https://research.ibm.com/blog/retrieval-augmented-generation-RAG",
+      "title": "Retrieval Augmented Generation (RAG)",
+      "metadata": {"author": "IBM Research", "category": "Research", "topic": "RAG", "type": "url"}
+    },
+    {
+      "source": "https://aws.amazon.com/what-is/retrieval-augmented-generation/",
+      "title": "What is Retrieval Augmented Generation (RAG)?",
+      "metadata": {"author": "AWS", "category": "Research", "topic": "RAG", "type": "url"}
+    },
+    {
+      "source": "https://cloud.google.com/use-cases/retrieval-augmented-generation?hl=en",
+      "title": "Retrieval Augmented Generation (RAG)",
+      "metadata": {"author": "Google", "category": "Research", "topic": "RAG", "type": "url"}
+    }
+  ]
+}
