@@ -45,8 +45,8 @@ def show_usage():
 
 
 def show_statistics(rag: RAGSystem):
-    """Display pipeline statistics."""
-    print("=== Pipeline Statistics ===")
+    """Display RAG system statistics."""
+    print("=== RAG System Statistics ===")
     stats = rag.get_stats()
     for key, value in stats.items():
         print(f"{key.replace('_', ' ').title()}: {value}")
