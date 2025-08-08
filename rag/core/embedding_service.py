@@ -5,7 +5,7 @@ from typing import Any
 from openai import OpenAI
 from tqdm import tqdm
 
-from app.src.config.settings import EMBEDDING_DIMENSIONS, EMBEDDING_MODEL, OPENAI_API_KEY
+from rag.config.settings import EMBEDDING_DIMENSIONS, EMBEDDING_MODEL, OPENAI_API_KEY
 
 
 class EmbeddingService:

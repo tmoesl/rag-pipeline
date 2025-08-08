@@ -3,7 +3,7 @@
 import sys
 from contextlib import suppress
 
-from app.src.rag_system import RAGSystem
+from rag.rag_system import RAGSystem
 
 
 def main():

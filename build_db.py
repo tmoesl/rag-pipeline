@@ -4,7 +4,7 @@ import json
 import sys
 from typing import Any
 
-from app.src.rag_system import RAGSystem
+from rag.rag_system import RAGSystem
 
 
 def load_documents(sources: list[str]) -> list[dict[str, Any]]:

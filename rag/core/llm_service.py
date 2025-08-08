@@ -4,7 +4,7 @@ from typing import Any
 
 from openai import OpenAI
 
-from app.src.config.settings import (
+from rag.config.settings import (
     CHAT_MODEL,
     MAX_OUTPUT_TOKENS,
     OPENAI_API_KEY,

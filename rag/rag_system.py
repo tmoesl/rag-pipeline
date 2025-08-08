@@ -3,12 +3,12 @@
 import warnings
 from typing import Any
 
-from app.src.config.settings import SIMILARITY_THRESHOLD, TOP_K_RESULTS
-from app.src.core.document_processor import DocumentProcessor
-from app.src.core.embedding_service import EmbeddingService
-from app.src.core.llm_service import LLMService
-from app.src.core.prompt import format_rag_prompt
-from app.src.core.vector_store import VectorStore
+from rag.config.settings import SIMILARITY_THRESHOLD, TOP_K_RESULTS
+from rag.core.document_processor import DocumentProcessor
+from rag.core.embedding_service import EmbeddingService
+from rag.core.llm_service import LLMService
+from rag.core.prompt_builder import format_rag_prompt
+from rag.core.vector_store import VectorStore
 
 warnings.filterwarnings("ignore", message="'pin_memory' argument is set as true")
 

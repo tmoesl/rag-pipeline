@@ -8,7 +8,7 @@ from pgvector.psycopg import register_vector
 from psycopg import sql
 from psycopg.rows import dict_row
 
-from app.src.config.settings import (
+from rag.config.settings import (
     EMBEDDING_DIMENSIONS,
     EMBEDDING_MAX_TOKENS,
     SCHEMA_NAME,
