@@ -3,13 +3,11 @@
 import warnings
 from typing import Any
 
-from app.src.config.settings import (
-    SIMILARITY_THRESHOLD,
-    TOP_K_RESULTS,
-)
+from app.src.config.settings import SIMILARITY_THRESHOLD, TOP_K_RESULTS
+from app.src.core.document_processor import DocumentProcessor
+from app.src.core.embedding_service import EmbeddingService
 from app.src.core.vector_store import VectorStore
 from app.src.pipelines.generation import GenerationPipeline
-from app.src.pipelines.ingestion import DataIngestionPipeline
 from app.src.pipelines.retrieval import RetrievalPipeline
 
 warnings.filterwarnings("ignore", message="'pin_memory' argument is set as true")
@@ -23,8 +21,10 @@ class RAGSystem:
         # Create single VectorStore instance as source of truth
         self.vector_store = VectorStore()
 
-        # Pass the shared VectorStore to pipelines
-        self.data_pipeline = DataIngestionPipeline(vector_store=self.vector_store)
+        # Core services
+        self.document_processor = DocumentProcessor()
+        self.embedding_service = EmbeddingService()
+
         self.retrieval_pipeline = RetrievalPipeline(vector_store=self.vector_store)
         self.generation_pipeline = GenerationPipeline()
 
@@ -39,7 +39,25 @@ class RAGSystem:
             title: Optional document title
             metadata: Optional document-level metadata
         """
-        self.data_pipeline.process_document(source, title, metadata)
+        # Step 1: Document extraction and chunking
+        chunks = self.document_processor.process_document(source, title)
+
+        # Step 2: Generate embeddings (batch with progress)
+        chunks_with_embeddings = self.embedding_service.add_embeddings_to_chunks(chunks)
+
+        # Step 3: Store in vector database
+        document_title = title or chunks[0]["metadata"]["title"]
+        self.vector_store.add_document_with_chunks(
+            title=document_title,
+            source=source,
+            chunks=chunks_with_embeddings,
+            metadata=metadata,
+        )
+
+        # Print pipeline statistics
+        stats = self.document_processor.get_chunk_stats(chunks)
+        print(f"\nTotal chunks: {stats['total_chunks']}")
+        print(f"Average tokens per chunk: {stats['avg_tokens_per_chunk']:.1f}\n")
 
     def ingest_multiple_documents(self, sources: list[dict[str, Any]]) -> None:
         """
@@ -48,7 +66,18 @@ class RAGSystem:
         Args:
             sources: List of dicts with 'source', optional 'title', and optional 'metadata' keys
         """
-        self.data_pipeline.process_batch(sources)
+        for i, source_info in enumerate(sources, 1):
+            source = source_info["source"]
+            doc_title = source_info.get("title")
+            doc_metadata = source_info.get("metadata")
+
+            print(f"\nProcessing document {i}/{len(sources)}: {source}")
+
+            try:
+                self.ingest_document(source=source, title=doc_title, metadata=doc_metadata)
+            except Exception as e:
+                print(f"Error processing document {source}: {e}")
+                continue
 
     def query(
         self,
@@ -91,12 +120,16 @@ class RAGSystem:
 
     def get_stats(self) -> dict[str, Any]:
         """Get comprehensive statistics about the RAG system."""
-        ingestion_stats = self.data_pipeline.get_stats()
+        # Vector/database stats
+        vector_stats = self.vector_store.get_stats()
+
+        # Embedding/LLM stats
         generation_stats = self.generation_pipeline.get_stats()
 
-        # Return ALL stats from both pipelines
         return {
-            **ingestion_stats,
+            **vector_stats,
+            "embedding_model": self.embedding_service.model,
+            "embedding_dimensions": self.embedding_service.dimensions,
             **generation_stats,
         }
 
