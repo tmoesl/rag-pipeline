@@ -32,13 +32,13 @@ class EmbeddingService:
         )
         return response.data[0].embedding
 
-    def create_embeddings_batch(self, texts: list[str], batch_size: int = 8) -> list[list[float]]:
+    def create_embeddings_batch(self, texts: list[str], batch_size: int = 100) -> list[list[float]]:
         """
         Create embeddings for multiple texts in batches.
 
         Args:
             texts: List of texts to embed
-            batch_size: Number of texts to process per batch (total tokens limit is 8191)
+            batch_size: Number of texts to process per batch
 
         Returns:
             List of embedding vectors
