@@ -135,7 +135,16 @@ class RAGSystem:
         }
 
     def retrieve_context(self, query: str, k: int, threshold: float) -> list[dict[str, Any]]:
-        """Embed the query and perform vector similarity search."""
+        """Embed the query and perform vector similarity search.
+
+        Args:
+            query: The user's question
+            k: Number of documents to retrieve
+            threshold: Similarity threshold
+
+        Returns:
+            List of dictionaries containing context
+        """
 
         # Step 1: Embed the query (with in-memory cache)
         cached = self._query_embedding_cache.get(query)
