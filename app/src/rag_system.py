@@ -6,8 +6,9 @@ from typing import Any
 from app.src.config.settings import SIMILARITY_THRESHOLD, TOP_K_RESULTS
 from app.src.core.document_processor import DocumentProcessor
 from app.src.core.embedding_service import EmbeddingService
+from app.src.core.llm_service import LLMService
+from app.src.core.prompt import format_rag_prompt
 from app.src.core.vector_store import VectorStore
-from app.src.pipelines.generation import GenerationPipeline
 
 warnings.filterwarnings("ignore", message="'pin_memory' argument is set as true")
 
@@ -23,10 +24,10 @@ class RAGSystem:
         # Core services
         self.document_processor = DocumentProcessor()
         self.embedding_service = EmbeddingService()
+        self.llm_service = LLMService()
 
         # In-memory cache for query embeddings
         self._query_embedding_cache: dict[str, list[float]] = {}
-        self.generation_pipeline = GenerationPipeline()
 
     def ingest_document(
         self, source: str, title: str | None = None, metadata: dict[str, Any] | None = None
@@ -110,7 +111,9 @@ class RAGSystem:
         print(f"Found {len(context)} relevant chunks")  # RAG-level result
 
         # Generate response
-        response = self.generation_pipeline.generate_response(question, context)
+        print("Generating response...")
+        messages = format_rag_prompt(question, context)
+        response = self.llm_service.generate_response(messages)
 
         return {
             "response": response,
@@ -120,11 +123,9 @@ class RAGSystem:
 
     def get_stats(self) -> dict[str, Any]:
         """Get comprehensive statistics about the RAG system."""
-        # Vector/database stats
+        # Vector database and generation stats
         vector_stats = self.vector_store.get_stats()
-
-        # Embedding/LLM stats
-        generation_stats = self.generation_pipeline.get_stats()
+        generation_stats = self.llm_service.get_stats()
 
         return {
             **vector_stats,
