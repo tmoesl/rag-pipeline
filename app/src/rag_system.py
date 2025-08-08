@@ -8,7 +8,6 @@ from app.src.core.document_processor import DocumentProcessor
 from app.src.core.embedding_service import EmbeddingService
 from app.src.core.vector_store import VectorStore
 from app.src.pipelines.generation import GenerationPipeline
-from app.src.pipelines.retrieval import RetrievalPipeline
 
 warnings.filterwarnings("ignore", message="'pin_memory' argument is set as true")
 
@@ -25,7 +24,8 @@ class RAGSystem:
         self.document_processor = DocumentProcessor()
         self.embedding_service = EmbeddingService()
 
-        self.retrieval_pipeline = RetrievalPipeline(vector_store=self.vector_store)
+        # In-memory cache for query embeddings
+        self._query_embedding_cache: dict[str, list[float]] = {}
         self.generation_pipeline = GenerationPipeline()
 
     def ingest_document(
@@ -97,7 +97,7 @@ class RAGSystem:
             Dictionary containing response, context, and metadata
         """
         # Retrieve relevant context
-        context = self.retrieval_pipeline.retrieve_context(question, k, threshold)
+        context = self.retrieve_context(question, k, threshold)
 
         if not context:
             print("No relevant context found")  # RAG-level decision
@@ -132,6 +132,24 @@ class RAGSystem:
             "embedding_dimensions": self.embedding_service.dimensions,
             **generation_stats,
         }
+
+    def retrieve_context(self, query: str, k: int, threshold: float) -> list[dict[str, Any]]:
+        """Embed the query and perform vector similarity search."""
+
+        # Step 1: Embed the query (with in-memory cache)
+        cached = self._query_embedding_cache.get(query)
+        if cached is not None:
+            query_embedding = cached
+        else:
+            query_embedding = self.embedding_service.embed_query(query)
+            self._query_embedding_cache[query] = query_embedding
+
+        # Step 2: Similarity search (using vector store)
+        print("Searching for relevant context...")
+        results = self.vector_store.similarity_search(
+            query_embedding=query_embedding, k=k, threshold=threshold
+        )
+        return results
 
     def clear_database(self):
         """Clear all documents and chunks from the database."""
