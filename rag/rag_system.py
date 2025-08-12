@@ -62,22 +62,30 @@ class RAGSystem:
 
     def ingest_multiple_documents(self, sources: list[dict[str, Any]]) -> None:
         """
-        Ingest multiple documents in batch.
+        Ingest multiple documents in batch. Skip existing sources.
 
         Args:
             sources: List of dicts with 'source', optional 'title', and optional 'metadata' keys
         """
-        for i, source_info in enumerate(sources, 1):
+        # Filter existing sources
+        existing = self.vector_store.get_existing_sources([s["source"] for s in sources])
+        new_sources = [s for s in sources if s["source"] not in existing]
+
+        print(f"📊 {len(existing)} skipped | {len(new_sources)} to process")
+        if not new_sources:
+            return
+
+        for i, source_info in enumerate(new_sources, 1):
             source = source_info["source"]
             doc_title = source_info.get("title")
             doc_metadata = source_info.get("metadata")
 
-            print(f"\nProcessing document {i}/{len(sources)}: {source}")
+            print(f"\n[{i}/{len(new_sources)}] Processing: {source}")
 
             try:
                 self.ingest_document(source=source, title=doc_title, metadata=doc_metadata)
             except Exception as e:
-                print(f"Error processing document {source}: {e}")
+                print(f"❌ Error processing {source}: {e}")
                 continue
 
     def query(
