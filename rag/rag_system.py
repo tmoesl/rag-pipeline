@@ -4,6 +4,7 @@ import warnings
 from typing import Any
 
 from rag.config.settings import (
+    HYBRID_SEARCH_ALPHA,
     HYBRID_SEARCH_K_MULTIPLIER,
     SIMILARITY_THRESHOLD,
     TOP_K_RESULTS,
@@ -97,6 +98,8 @@ class RAGSystem:
         question: str,
         k: int = TOP_K_RESULTS,
         threshold: float = SIMILARITY_THRESHOLD,
+        search_mode: str = "similarity",
+        alpha: float = HYBRID_SEARCH_ALPHA,
     ) -> dict[str, Any]:
         """
         Main query method that combines retrieval and generation.
@@ -104,34 +107,57 @@ class RAGSystem:
         Args:
             question: The user's question
             k: Number of documents to retrieve
-            threshold: Similarity threshold
+            threshold: Similarity threshold for semantic search
+            search_mode: Search strategy ("similarity", "keyword", "hybrid")
+            alpha: Weight for hybrid search (0.0 = pure keyword, 1.0 = pure semantic)
 
         Returns:
-            Dictionary containing response, context, and metadata
+            Dictionary containing response, context, metadata, and search info
+
+        Raises:
+            ValueError: If search_mode is not one of the supported modes
         """
-        # Retrieve relevant context
-        context = self.similarity_search(question, k, threshold)
+        print(f"\n💬 Processing query with {search_mode} search: {question}")
+
+        # Route to appropriate search method based on search_mode
+        if search_mode == "similarity":
+            context = self.similarity_search(question, k, threshold)
+        elif search_mode == "keyword":
+            context = self.keyword_search(question, k)
+        elif search_mode == "hybrid":
+            context = self.hybrid_search(question, k, threshold, alpha)
+        else:
+            raise ValueError(
+                f"Invalid search_mode: '{search_mode}'. "
+                f"Supported modes: 'similarity', 'keyword', 'hybrid'"
+            )
+
+        # Base result template
+        result = {
+            "response": "",
+            "context": context or [],
+            "context_count": len(context) if context else 0,
+            "search_mode": search_mode,
+            "search_params": {
+                "k": k,
+                "threshold": threshold if search_mode in ("similarity", "hybrid") else None,
+                "alpha": alpha if search_mode == "hybrid" else None,
+            },
+        }
 
         if not context:
             print("No relevant context found")  # RAG-level decision
-            return {
-                "response": "I couldn't find any relevant information to answer your question.",
-                "context": [],
-                "context_count": 0,
-            }
+            result["response"] = "I couldn't find any relevant information to answer your question."
+            return result
 
         print(f"Found {len(context)} relevant chunks")  # RAG-level result
 
         # Generate response
         print("Generating response...")
         messages = format_rag_prompt(question, context)
-        response = self.llm_service.generate_response(messages)
+        result["response"] = self.llm_service.generate_response(messages)
 
-        return {
-            "response": response,
-            "context": context,
-            "context_count": len(context),
-        }
+        return result
 
     def get_stats(self) -> dict[str, Any]:
         """Get comprehensive statistics about the RAG system."""
@@ -197,11 +223,7 @@ class RAGSystem:
         return self.vector_store.keyword_search(query=query, k=k)
 
     def hybrid_search(
-        self,
-        query: str,
-        k: int = 5,
-        threshold: float = 0.3,
-        alpha: float = 0.6,
+        self, query: str, k: int, threshold: float, alpha: float
     ) -> list[dict[str, Any]]:
         """
         Hybrid search combining semantic and keyword search with RRF fusion.
