@@ -90,6 +90,28 @@ class VectorStore:
             self.conn.commit()
             return document_id
 
+    def get_existing_sources(self, sources: list[str]) -> set[str]:
+        """
+        Check which sources already exist in the database.
+
+        Args:
+            sources: List of source paths/URLs to check
+
+        Returns:
+            Set of sources that already exist
+        """
+        if not sources:
+            return set()
+
+        with self.conn.cursor() as cur:
+            result = cur.execute(
+                sql.SQL("SELECT source FROM {}.documents WHERE source = ANY(%s)").format(
+                    sql.Identifier(self.schema)
+                ),
+                (sources,),
+            )
+            return {row[0] for row in result.fetchall()}
+
     def similarity_search(
         self,
         query_embedding: list[float],
