@@ -33,6 +33,11 @@ EMBEDDING_MAX_TOKENS = int(os.getenv("EMBEDDING_MAX_TOKENS", "8191"))
 TOP_K_RESULTS = int(os.getenv("TOP_K_RESULTS", "5"))
 SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", "0.3"))
 
+# Hybrid search configuration
+HYBRID_SEARCH_ALPHA = float(os.getenv("HYBRID_SEARCH_ALPHA", "0.6"))
+KEYWORD_SEARCH_ENABLED = os.getenv("KEYWORD_SEARCH_ENABLED", "true").lower() == "true"
+HYBRID_SEARCH_K_MULTIPLIER = int(os.getenv("HYBRID_SEARCH_K_MULTIPLIER", "3"))
+
 # RAG generation configuration
 TEMPERATURE = float(os.getenv("TEMPERATURE", "0.7"))
 MAX_OUTPUT_TOKENS = int(os.getenv("MAX_OUTPUT_TOKENS", "1000"))
