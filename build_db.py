@@ -4,7 +4,7 @@ import json
 import sys
 from typing import Any
 
-from app.src.rag_system import RAGSystem
+from rag.rag_system import RAGSystem
 
 
 def load_documents(sources: list[str]) -> list[dict[str, Any]]:
@@ -45,8 +45,8 @@ def show_usage():
 
 
 def show_statistics(rag: RAGSystem):
-    """Display pipeline statistics."""
-    print("=== Pipeline Statistics ===")
+    """Display RAG system statistics."""
+    print("=== RAG System Statistics ===")
     stats = rag.get_stats()
     for key, value in stats.items():
         print(f"{key.replace('_', ' ').title()}: {value}")

@@ -3,7 +3,7 @@
 import sys
 from contextlib import suppress
 
-from app.src.rag_system import RAGSystem
+from rag.rag_system import RAGSystem
 
 
 def main():
@@ -19,12 +19,13 @@ def main():
         sys.exit(1)
 
     # Check if database has documents
-    doc_count = rag.vector_store.get_document_count()
+    stats = rag.get_stats()
+    doc_count = stats.get("total_documents", 0)
+    chunk_count = stats.get("total_chunks", 0)
     if doc_count == 0:
         print("No documents found in database. Please run build_db.py first.")
         sys.exit(1)
 
-    chunk_count = rag.vector_store.get_chunk_count()
     print(f"✅ RAG system ready! ({doc_count} documents, {chunk_count} chunks)")
 
     print("\nCommands: 'stats', 'quit' or 'exit'")

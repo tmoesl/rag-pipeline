@@ -7,7 +7,7 @@ from docling.document_converter import DocumentConverter
 from docling_core.transforms.chunker.hybrid_chunker import HybridChunker
 from docling_core.transforms.chunker.tokenizer.openai import OpenAITokenizer
 
-from app.src.config.settings import EMBEDDING_MAX_TOKENS, EMBEDDING_MODEL
+from rag.config.settings import EMBEDDING_MAX_TOKENS, EMBEDDING_MODEL
 
 
 class DocumentProcessor:
