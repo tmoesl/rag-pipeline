@@ -31,17 +31,9 @@ def show_usage():
     print("  python build_db.py [--clear] config.json         # Ingest from JSON")
     print("  python build_db.py --clear                        # Clear database only")
     print("  python build_db.py --stats                        # View statistics")
-    print("\nJSON Format:")
-    print('  {"documents": [{"source": "doc.pdf", "title": "...", "metadata": {...}}]}')
-    print("\nExamples:")
-    print("  python build_db.py doc1.pdf doc2.pdf")
-    print("  python build_db.py documents.json")
-    print("  python build_db.py config.json extra.pdf")
-    print("  python build_db.py --clear documents.json")
-    print("  python build_db.py --stats")
     print("\nOptions:")
-    print("  --clear    Clear database (can be used alone or with sources)")
-    print("  --stats    Show statistics only (cannot be used with sources)")
+    print("  --clear    Clear database before ingesting")
+    print("  --stats    Show statistics only")
 
 
 def show_statistics(rag: RAGSystem):
@@ -61,7 +53,7 @@ def main():
         show_usage()
         sys.exit(0)
 
-    # Parse simple flags
+    # Parse flags and sources
     clear_db = "--clear" in args
     stats_only = "--stats" in args
     sources = [arg for arg in args if not arg.startswith("--")]
@@ -70,9 +62,8 @@ def main():
     if stats_only and sources:
         print("Error: --stats cannot be used with sources", file=sys.stderr)
         sys.exit(1)
-
-    if not stats_only and not sources and not clear_db:
-        print("Error: No sources provided", file=sys.stderr)
+    if not (stats_only or sources or clear_db):
+        print("Error: No action specified", file=sys.stderr)
         sys.exit(1)
 
     # Initialize RAG system
@@ -92,23 +83,18 @@ def main():
 
         # Handle database clearing
         if clear_db:
-            print("Clearing all documents from the database...")
+            print("Clearing database...")
             rag.clear_database()
-            print("Database cleared successfully!")
+            print("Database cleared!")
 
-        # Handle clear-only case (no sources to ingest)
-        if clear_db and not sources:
-            print("Database operation completed.")
-            return
-
-        # Ingest documents (only if sources provided)
+        # Ingest documents
         if sources:
             documents = load_documents(sources)
             print(f"Ingesting {len(documents)} document(s)...")
             rag.ingest_multiple_documents(documents)
-            print("✅ Vector database built successfully")
+            print("✅ Documents ingested successfully")
 
-        # Show final statistics
+        # Show statistics
         print()
         show_statistics(rag)
 
