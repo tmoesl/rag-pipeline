@@ -3,12 +3,7 @@
 import warnings
 from typing import Any
 
-from rag.config.settings import (
-    HYBRID_SEARCH_ALPHA,
-    HYBRID_SEARCH_K_MULTIPLIER,
-    SIMILARITY_THRESHOLD,
-    TOP_K_RESULTS,
-)
+from rag.config.settings import HYBRID_SEARCH_ALPHA, SIMILARITY_THRESHOLD, TOP_K_RESULTS
 from rag.core.document_processor import DocumentProcessor
 from rag.core.embedding_service import EmbeddingService
 from rag.core.llm_service import LLMService
@@ -169,6 +164,7 @@ class RAGSystem:
             **vector_stats,
             "embedding_model": self.embedding_service.model,
             "embedding_dimensions": self.embedding_service.dimensions,
+            "cached_queries": len(self._query_embedding_cache),
             **generation_stats,
         }
 
@@ -241,7 +237,7 @@ class RAGSystem:
         print(f"Performing hybrid search (α={alpha:.1f})...")
 
         # Get more results from each method for better fusion
-        search_k = k * HYBRID_SEARCH_K_MULTIPLIER
+        search_k = k * 3
 
         # Semantic search
         semantic_results = self.vector_store.similarity_search(
