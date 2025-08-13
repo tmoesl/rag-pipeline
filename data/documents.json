@@ -29,6 +29,11 @@
       "source": "https://cloud.google.com/use-cases/retrieval-augmented-generation?hl=en",
       "title": "Retrieval Augmented Generation (RAG)",
       "metadata": {"author": "Google", "category": "Research", "topic": "RAG", "type": "url"}
+    },
+    {
+      "source": "https://www.anthropic.com/news/model-context-protocol",
+      "title": "Model Context Protocol (MCP)",
+      "metadata": {"author": "Anthropic", "category": "Research", "topic": "MCP", "type": "url"}
     }
   ]
 }

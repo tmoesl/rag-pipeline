@@ -5,6 +5,7 @@ import sys
 from typing import Any
 
 from rag.rag_system import RAGSystem
+from rag.utils.logger import logger
 
 
 def load_documents(sources: list[str]) -> list[dict[str, Any]]:
@@ -17,7 +18,7 @@ def load_documents(sources: list[str]) -> list[dict[str, Any]]:
                     data = json.load(f)
                     documents.extend(data.get("documents", []))
             except (FileNotFoundError, json.JSONDecodeError) as e:
-                print(f"Error reading JSON file {source}: {e}", file=sys.stderr)
+                logger.error(f"Error reading JSON file {source}: {e}")
                 sys.exit(1)
         else:
             documents.append({"source": source})
@@ -38,7 +39,7 @@ def show_usage():
 
 def show_statistics(rag: RAGSystem):
     """Display RAG system statistics."""
-    print("=== RAG System Statistics ===")
+    print("\n====================== RAG System Statistics ======================")
     stats = rag.get_stats()
     for key, value in stats.items():
         print(f"{key.replace('_', ' ').title()}: {value}")
@@ -68,11 +69,10 @@ def main():
 
     # Initialize RAG system
     try:
-        print("=== Building Vector Database ===\n")
-        print("Initializing RAG system...")
+        print("\n====================== Building Vector Database ======================")
         rag = RAGSystem()
     except Exception as e:
-        print(f"Error initializing RAG system: {e}", file=sys.stderr)
+        logger.error(f"Error initializing RAG system: {e}")
         sys.exit(1)
 
     try:
@@ -83,26 +83,26 @@ def main():
 
         # Handle database clearing
         if clear_db:
-            print("Clearing database...")
+            logger.info("Clearing database...")
             rag.clear_database()
-            print("Database cleared!")
+            logger.info("Database cleared")
 
         # Ingest documents
         if sources:
             documents = load_documents(sources)
-            print(f"Ingesting {len(documents)} document(s)...")
+            logger.info(f"Ingesting {len(documents)} document(s)...")
             rag.ingest_multiple_documents(documents)
-            print("✅ Documents ingested successfully")
 
         # Show statistics
-        print()
+        if sources or clear_db:
+            print()  # Visual separation for CLI
         show_statistics(rag)
 
     except KeyboardInterrupt:
-        print("\nOperation cancelled by user.", file=sys.stderr)
+        logger.warning("Operation cancelled by user")
         sys.exit(130)
     except Exception as e:
-        print(f"Error during data ingestion: {str(e)}", file=sys.stderr)
+        logger.error(f"Error during data ingestion: {e}")
         sys.exit(1)
     finally:
         # Clean up resources

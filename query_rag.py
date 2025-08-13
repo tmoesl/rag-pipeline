@@ -4,15 +4,55 @@ import sys
 from contextlib import suppress
 
 from rag.rag_system import RAGSystem
+from rag.utils.logger import logger
+
+
+def display_chunks(context: list, search_mode: str, search_params: dict):
+    """Display retrieved chunks with relevant metrics."""
+    alpha = search_params.get("alpha")
+
+    print("\nRetrieved chunks:")
+    for i, doc in enumerate(context, 1):
+        title = doc.get("title", "Unknown")
+        idx = doc.get("chunk_index", i)
+        meta = doc.get("metadata") or {}
+        author = meta.get("author", "Unknown")
+
+        sim = doc.get("similarity")
+        ts_rank = doc.get("rank")
+        fusion = doc.get("fusion_score")
+        s_rank = doc.get("semantic_rank")
+        k_rank = doc.get("keyword_rank")
+
+        parts: list[str] = []
+        if search_mode == "hybrid":
+            if fusion is not None:
+                parts.append(f"Fusion: {fusion:.4f}")
+            parts.append(f"SemRank: {s_rank if s_rank is not None else '-'}")
+            parts.append(f"KeyRank: {k_rank if k_rank is not None else '-'}")
+            if sim is not None:
+                parts.append(f"Sim: {sim:.3f}")
+            if ts_rank is not None:
+                parts.append(f"TS-Rank: {ts_rank:.4f}")
+            if alpha is not None:
+                parts.append(f"alpha={alpha}")
+        elif search_mode == "semantic":
+            if sim is not None:
+                parts.append(f"Similarity: {sim:.3f}")
+        elif ts_rank is not None:
+            parts.append(f"TS-Rank: {ts_rank:.4f}")
+
+        extra = f", {', '.join(parts)}" if parts else ""
+        print(f"{i}. {title} (Chunk {idx}{extra}, Author: {author})")
+        print(f"   Preview: {doc.get('content', '')[:200]}...\n")
 
 
 def main():
     """Main function for the interactive chat interface."""
-    print("=== RAG Query System ===")
+    print("====================== RAG System ======================")
 
     # Initialize and check RAG system
     try:
-        print("Initializing...")
         rag = RAGSystem()
         stats = rag.get_stats()
         doc_count = stats.get("total_documents", 0)
@@ -20,13 +60,12 @@ def main():
         if doc_count == 0:
             print("No documents found. Please run build_db.py first.")
             sys.exit(1)
-        print(f"Vector database initialized! ({doc_count} documents, {chunk_count} chunks)")
-        print("✅ RAG system ready!")
+        logger.info(f"Vector database: ({doc_count} documents, {chunk_count} chunks)")
     except Exception as e:
-        print(f"Error: {str(e)}")
+        logger.error(f"Error initializing RAG system: {e}")
         sys.exit(1)
 
-    print("\nCommands: 'stats', 'quit', 'exit', q")
+    print("\nCommands: 'stats', 'quit', 'exit', 'q'")
     print("\nExample questions:")
     print("What is the main benefit of contextual retrieval?")
     print("What is the biggest advantage of using Docling for document processing?")
@@ -38,6 +77,8 @@ def main():
 
         if query.lower() in ["quit", "exit", "q"]:
             print("\nGoodbye! 👋")
+            logger.info("RAG system shutting down")
+            rag.close()
             break
 
         if query.lower() == "stats":
@@ -53,32 +94,21 @@ def main():
 
         try:
             # Query the system
-            print("\nProcessing request...")
             result = rag.query(query)
 
             print("\nResponse:")
             print(result["response"])
 
-            # Ask if user wants to see retrieved chunks
-            if result["context"]:
-                show_context = input("\nShow retrieved chunks? (y/n): ").strip().lower()
-                if show_context == "y":
-                    print("\nRetrieved chunks:")
-                    for i, doc in enumerate(result["context"], 1):
-                        title = doc.get("title", "Unknown")
-                        idx = doc.get("chunk_index", i)
-                        sim = doc.get("similarity", 0.0)
-                        meta = doc.get("metadata", {})
-                        author = meta.get("author", "Unknown")
+            context = result.get("context", [])
+            if not context:
+                continue
 
-                        print(
-                            f"{i}. {title} (Chunk {idx}, Similarity: {sim:.2f}, Author: {author})"
-                        )
-                        print(f"   Preview: {doc['content'][:200]}...")
-                        print()
-
+            if input("\nShow retrieved chunks? (y/n): ").strip().lower() == "y":
+                search_mode = result.get("search_mode", "")
+                search_params = result.get("search_params", {})
+                display_chunks(context, search_mode, search_params)
         except Exception as e:
-            print(f"\nError processing query: {str(e)}")
+            logger.error(f"Error processing query: {e}")
 
     # Clean up
     with suppress(Exception):
