@@ -11,6 +11,7 @@ from psycopg.rows import dict_row
 from rag.config.settings import (
     EMBEDDING_DIMENSIONS,
     EMBEDDING_MAX_TOKENS,
+    KEYWORD_SEARCH_ENABLED,
     SCHEMA_NAME,
     get_psycopg_connection_string,
 )
@@ -158,22 +159,57 @@ class VectorStore:
                 query = base_query + sql.SQL(" ORDER BY c.embedding <#> %s::vector LIMIT %s")
                 result = cur.execute(query, (query_embedding, query_embedding, k))
 
-            results = result.fetchall()
+            # Extract results (rows) as dicts
+            results = [dict(r) for r in result.fetchall()]
 
-            # Format results
-            return [
-                {
-                    "id": r["id"],
-                    "content": r["content"],
-                    "chunk_index": r["chunk_index"],
-                    "metadata": {**r["metadata"], **(r["doc_metadata"] or {})},
-                    "title": r["title"],
-                    "source": r["source"],
-                    "similarity": float(r["similarity"]),
-                    "created_at": r["created_at"].isoformat() if r["created_at"] else None,
-                }
-                for r in results
-            ]
+            # Merge doc_metadata into metadata for easier access, remove doc_metadata
+            for row in results:
+                row["metadata"] = (row.get("metadata") or {}) | (row.get("doc_metadata") or {})
+                row.pop("doc_metadata", None)
+
+            return results
+
+    def keyword_search(self, query: str, k: int = 5) -> list[dict[str, Any]]:
+        """
+        Perform keyword search using PostgreSQL full-text search.
+
+        Args:
+            query: Search query text
+            k: Number of results to return
+
+        Returns:
+            List of matching chunks with metadata and text search rank
+        """
+        with self.conn.cursor(row_factory=dict_row) as cur:
+            query_sql = sql.SQL("""
+                SELECT
+                    c.id,
+                    c.content,
+                    c.chunk_index,
+                    c.metadata,
+                    d.title,
+                    d.source,
+                    d.metadata as doc_metadata,
+                    ts_rank(c.fts, plainto_tsquery('english', %s)) as rank,
+                    c.created_at
+                FROM {}.chunks c
+                JOIN {}.documents d ON c.document_id = d.id
+                WHERE c.fts @@ plainto_tsquery('english', %s)
+                ORDER BY ts_rank(c.fts, plainto_tsquery('english', %s)) DESC
+                LIMIT %s
+            """).format(sql.Identifier(self.schema), sql.Identifier(self.schema))
+
+            result = cur.execute(query_sql, (query, query, query, k))
+
+            # Extract results (rows) as dicts
+            results = [dict(r) for r in result.fetchall()]
+
+            # Merge doc_metadata into metadata for easier access, remove doc_metadata
+            for row in results:
+                row["metadata"] = (row.get("metadata") or {}) | (row.get("doc_metadata") or {})
+                row.pop("doc_metadata", None)
+
+            return results
 
     def get_document_count(self) -> int:
         """Get the total number of documents in the store."""
@@ -208,6 +244,7 @@ class VectorStore:
             "total_chunks": self.get_chunk_count(),
             "embedding_dimensions": EMBEDDING_DIMENSIONS,
             "embedding_max_tokens": EMBEDDING_MAX_TOKENS,
+            "keyword_search_enabled": KEYWORD_SEARCH_ENABLED,
         }
 
     def close(self):
