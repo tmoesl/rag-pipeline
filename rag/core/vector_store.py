@@ -159,10 +159,15 @@ class VectorStore:
                 query = base_query + sql.SQL(" ORDER BY c.embedding <#> %s::vector LIMIT %s")
                 result = cur.execute(query, (query_embedding, query_embedding, k))
 
-            results = result.fetchall()
+            # Extract results (rows) as dicts
+            results = [dict(r) for r in result.fetchall()]
 
-            # Format results
-            return [dict(result) for result in results]
+            # Merge doc_metadata into metadata for easier access, remove doc_metadata
+            for row in results:
+                row["metadata"] = (row.get("metadata") or {}) | (row.get("doc_metadata") or {})
+                row.pop("doc_metadata", None)
+
+            return results
 
     def keyword_search(self, query: str, k: int = 5) -> list[dict[str, Any]]:
         """
@@ -195,10 +200,16 @@ class VectorStore:
             """).format(sql.Identifier(self.schema), sql.Identifier(self.schema))
 
             result = cur.execute(query_sql, (query, query, query, k))
-            results = result.fetchall()
 
-            # Format results
-            return [dict(result) for result in results]
+            # Extract results (rows) as dicts
+            results = [dict(r) for r in result.fetchall()]
+
+            # Merge doc_metadata into metadata for easier access, remove doc_metadata
+            for row in results:
+                row["metadata"] = (row.get("metadata") or {}) | (row.get("doc_metadata") or {})
+                row.pop("doc_metadata", None)
+
+            return results
 
     def get_document_count(self) -> int:
         """Get the total number of documents in the store."""
