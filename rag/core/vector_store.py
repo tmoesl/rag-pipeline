@@ -113,14 +113,14 @@ class VectorStore:
             )
             return {row[0] for row in result.fetchall()}
 
-    def similarity_search(
+    def semantic_search(
         self,
         query_embedding: list[float],
         k: int = 5,
         threshold: float | None = None,
     ) -> list[dict[str, Any]]:
         """
-        Perform similarity search using inner product.
+        Perform semantic search using embedding similarity (inner product).
 
         Args:
             query_embedding: Query vector
@@ -128,7 +128,7 @@ class VectorStore:
             threshold: Minimum similarity threshold
 
         Returns:
-            List of similar chunks with metadata
+            List of semantically similar chunks with metadata
         """
         with self.conn.cursor(row_factory=dict_row) as cur:
             # Base query with similarity score using inner product

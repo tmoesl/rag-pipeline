@@ -3,7 +3,7 @@
 import warnings
 from typing import Any
 
-from rag.config.settings import HYBRID_SEARCH_ALPHA, SIMILARITY_THRESHOLD, TOP_K_RESULTS
+from rag.config.settings import HYBRID_SEARCH_ALPHA, SEMANTIC_THRESHOLD, TOP_K_RESULTS
 from rag.core.document_processor import DocumentProcessor
 from rag.core.embedding_service import EmbeddingService
 from rag.core.llm_service import LLMService
@@ -92,8 +92,8 @@ class RAGSystem:
         self,
         question: str,
         k: int = TOP_K_RESULTS,
-        threshold: float = SIMILARITY_THRESHOLD,
-        search_mode: str = "similarity",
+        threshold: float = SEMANTIC_THRESHOLD,
+        search_mode: str = "semantic",
         alpha: float = HYBRID_SEARCH_ALPHA,
     ) -> dict[str, Any]:
         """
@@ -103,7 +103,7 @@ class RAGSystem:
             question: The user's question
             k: Number of documents to retrieve
             threshold: Similarity threshold for semantic search
-            search_mode: Search strategy ("similarity", "keyword", "hybrid")
+            search_mode: Search strategy ("semantic", "keyword", "hybrid")
             alpha: Weight for hybrid search (0.0 = pure keyword, 1.0 = pure semantic)
 
         Returns:
@@ -115,8 +115,8 @@ class RAGSystem:
         print(f"\n💬 Processing query with {search_mode} search: {question}")
 
         # Route to appropriate search method based on search_mode
-        if search_mode == "similarity":
-            context = self.similarity_search(question, k, threshold)
+        if search_mode == "semantic":
+            context = self.semantic_search(question, k, threshold)
         elif search_mode == "keyword":
             context = self.keyword_search(question, k)
         elif search_mode == "hybrid":
@@ -124,7 +124,7 @@ class RAGSystem:
         else:
             raise ValueError(
                 f"Invalid search_mode: '{search_mode}'. "
-                f"Supported modes: 'similarity', 'keyword', 'hybrid'"
+                f"Supported modes: 'semantic', 'keyword', 'hybrid'"
             )
 
         # Base result template
@@ -135,7 +135,7 @@ class RAGSystem:
             "search_mode": search_mode,
             "search_params": {
                 "k": k,
-                "threshold": threshold if search_mode in ("similarity", "hybrid") else None,
+                "threshold": threshold if search_mode in ("semantic", "hybrid") else None,
                 "alpha": alpha if search_mode == "hybrid" else None,
             },
         }
@@ -186,21 +186,21 @@ class RAGSystem:
         self._query_embedding_cache[query] = embedding
         return embedding
 
-    def similarity_search(self, query: str, k: int, threshold: float) -> list[dict[str, Any]]:
+    def semantic_search(self, query: str, k: int, threshold: float) -> list[dict[str, Any]]:
         """
-        Semantic similarity search using embeddings.
+        Semantic search using embeddings similarity (inner product).
 
         Args:
             query: The user's question
-            k: Number of documents to retrieve
-            threshold: Similarity threshold
+            k: Number of results to return
+            threshold: Minimum similarity threshold
 
         Returns:
-            List of similar chunks with metadata
+            List of semantically similar chunks with metadata
         """
         query_embedding = self.get_query_embedding(query)
-        print("Performing semantic similarity search...")
-        return self.vector_store.similarity_search(
+        print("Performing semantic search...")
+        return self.vector_store.semantic_search(
             query_embedding=query_embedding, k=k, threshold=threshold
         )
 
@@ -240,7 +240,7 @@ class RAGSystem:
         search_k = k * 3
 
         # Semantic search
-        semantic_results = self.vector_store.similarity_search(
+        semantic_results = self.vector_store.semantic_search(
             query_embedding=query_embedding, k=search_k, threshold=threshold
         )
 

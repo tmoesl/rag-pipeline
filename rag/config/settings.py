@@ -31,7 +31,7 @@ EMBEDDING_MAX_TOKENS = int(os.getenv("EMBEDDING_MAX_TOKENS", "8191"))
 
 # Vector search configuration
 TOP_K_RESULTS = int(os.getenv("TOP_K_RESULTS", "5"))
-SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", "0.3"))
+SEMANTIC_THRESHOLD = float(os.getenv("SEMANTIC_THRESHOLD", "0.3"))
 
 # Hybrid search configuration
 HYBRID_SEARCH_ALPHA = float(os.getenv("HYBRID_SEARCH_ALPHA", "0.6"))
