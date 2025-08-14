@@ -4,10 +4,11 @@ Single instance, environment-configurable, suppresses noisy libraries.
 """
 
 import logging
-import os
 import sys
 import time
 from functools import lru_cache
+
+from rag.config.settings import get_settings
 
 
 @lru_cache
@@ -19,8 +20,9 @@ def setup_logger() -> logging.Logger:
     # Configure timestamp to UTC
     logging.Formatter.converter = time.gmtime
 
-    # Get environment configuration
-    log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+    # Get configuration from settings
+    settings = get_settings()
+    log_level = settings.log_level.upper()
 
     # Create main logger
     logger = logging.getLogger("rag")

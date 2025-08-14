@@ -5,7 +5,7 @@ from typing import Any
 from openai import OpenAI
 from tqdm import tqdm
 
-from rag.config.settings import EMBEDDING_DIMENSIONS, EMBEDDING_MODEL, OPENAI_API_KEY
+from rag.config.settings import get_settings
 
 
 class EmbeddingService:
@@ -13,9 +13,10 @@ class EmbeddingService:
 
     def __init__(self):
         """Initialize the embedding service with OpenAI client."""
-        self.client = OpenAI(api_key=OPENAI_API_KEY)
-        self.model = EMBEDDING_MODEL
-        self.dimensions = EMBEDDING_DIMENSIONS
+        settings = get_settings()
+        self.client = OpenAI(api_key=settings.openai_api_key.get_secret_value())
+        self.model = settings.embedding_model
+        self.dimensions = settings.embedding_dimensions
 
     def create_embedding(self, text: str) -> list[float]:
         """

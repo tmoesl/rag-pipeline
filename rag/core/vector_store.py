@@ -8,13 +8,7 @@ from pgvector.psycopg import register_vector
 from psycopg import sql
 from psycopg.rows import dict_row
 
-from rag.config.settings import (
-    EMBEDDING_DIMENSIONS,
-    EMBEDDING_MAX_TOKENS,
-    KEYWORD_SEARCH_ENABLED,
-    SCHEMA_NAME,
-    get_psycopg_connection_string,
-)
+from rag.config.settings import get_settings
 
 
 class VectorStore:
@@ -22,13 +16,15 @@ class VectorStore:
 
     def __init__(self):
         """Initialize vector store with database connection."""
-        self.schema = SCHEMA_NAME
+        settings = get_settings()
+        self.schema = settings.database.schema_name
         self.conn: psycopg.Connection = self._establish_connection()
 
     def _establish_connection(self) -> psycopg.Connection:
         """Establish connection to PostgreSQL database."""
         try:
-            conn_str = get_psycopg_connection_string()
+            settings = get_settings()
+            conn_str = settings.database.conn_string
             conn = psycopg.connect(conn_str)
             conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
             register_vector(conn)
@@ -239,12 +235,13 @@ class VectorStore:
 
     def get_stats(self) -> dict[str, Any]:
         """Get database statistics."""
+        settings = get_settings()
         return {
             "total_documents": self.get_document_count(),
             "total_chunks": self.get_chunk_count(),
-            "embedding_dimensions": EMBEDDING_DIMENSIONS,
-            "embedding_max_tokens": EMBEDDING_MAX_TOKENS,
-            "keyword_search_enabled": KEYWORD_SEARCH_ENABLED,
+            "embedding_dimensions": settings.embedding_dimensions,
+            "embedding_max_tokens": settings.embedding_max_tokens,
+            "keyword_search_enabled": settings.keyword_search_enabled,
         }
 
     def close(self):

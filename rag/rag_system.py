@@ -3,7 +3,7 @@
 import warnings
 from typing import Any
 
-from rag.config.settings import HYBRID_SEARCH_ALPHA, SEMANTIC_THRESHOLD, TOP_K_RESULTS
+from rag.config.settings import get_settings
 from rag.core.document_processor import DocumentProcessor
 from rag.core.embedding_service import EmbeddingService
 from rag.core.llm_service import LLMService
@@ -105,10 +105,10 @@ class RAGSystem:
     def query(
         self,
         question: str,
-        k: int = TOP_K_RESULTS,
-        threshold: float = SEMANTIC_THRESHOLD,
+        k: int | None = None,
+        threshold: float | None = None,
         search_mode: str = "semantic",
-        alpha: float = HYBRID_SEARCH_ALPHA,
+        alpha: float | None = None,
     ) -> dict[str, Any]:
         """
         Main query method that combines retrieval and generation.
@@ -126,6 +126,12 @@ class RAGSystem:
         Raises:
             ValueError: If search_mode is not one of the supported modes
         """
+        # Set defaults from settings if not provided
+        settings = get_settings()
+        k = k or settings.top_k_results
+        threshold = threshold or settings.semantic_threshold
+        alpha = alpha or settings.hybrid_search_alpha
+
         logger.debug(f"Processing query with {search_mode} search: {question}")
 
         # Route to appropriate search method based on search_mode
