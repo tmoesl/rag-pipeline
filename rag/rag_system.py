@@ -9,6 +9,7 @@ from rag.core.embedding_service import EmbeddingService
 from rag.core.llm_service import LLMService
 from rag.core.prompt_builder import format_rag_prompt
 from rag.core.vector_store import VectorStore
+from rag.utils.logger import logger
 
 warnings.filterwarnings("ignore", message="'pin_memory' argument is set as true")
 
@@ -28,6 +29,10 @@ class RAGSystem:
 
         # In-memory cache for query embeddings
         self._query_embedding_cache: dict[str, list[float]] = {}
+
+        logger.info("RAG system initialized")
+        logger.info("Vector database connection established")
+        logger.info("In-memory query cache ready")
 
     def ingest_document(
         self, source: str, title: str | None = None, metadata: dict[str, Any] | None = None
@@ -57,8 +62,10 @@ class RAGSystem:
 
         # Print pipeline statistics
         stats = self.document_processor.get_chunk_stats(chunks)
-        print(f"\nTotal chunks: {stats['total_chunks']}")
-        print(f"Average tokens per chunk: {stats['avg_tokens_per_chunk']:.1f}\n")
+        print(
+            f"Document processed: {stats['total_chunks']} chunks,",
+            f"{stats['avg_tokens_per_chunk']:.1f} avg tokens per chunk\n",
+        )
 
     def ingest_multiple_documents(self, sources: list[dict[str, Any]]) -> None:
         """
@@ -71,10 +78,11 @@ class RAGSystem:
         existing = self.vector_store.get_existing_sources([s["source"] for s in sources])
         new_sources = [s for s in sources if s["source"] not in existing]
 
-        print(f"📊 {len(existing)} skipped | {len(new_sources)} to process")
+        logger.info(f"Batch processing: {len(existing)} skipped, {len(new_sources)} to process")
         if not new_sources:
             return
 
+        processed = 0
         for i, source_info in enumerate(new_sources, 1):
             source = source_info["source"]
             doc_title = source_info.get("title")
@@ -84,9 +92,15 @@ class RAGSystem:
 
             try:
                 self.ingest_document(source=source, title=doc_title, metadata=doc_metadata)
+                processed += 1
             except Exception as e:
-                print(f"❌ Error processing {source}: {e}")
+                logger.error(f"Error processing {source}: {e}")
                 continue
+
+        logger.info(
+            f"{processed}/{len(new_sources)} succeeded, {len(new_sources) - processed} failed,"
+            f" {len(existing)}/{len(sources)} skipped"
+        )
 
     def query(
         self,
@@ -112,7 +126,7 @@ class RAGSystem:
         Raises:
             ValueError: If search_mode is not one of the supported modes
         """
-        print(f"\n💬 Processing query with {search_mode} search: {question}")
+        logger.debug(f"Processing query with {search_mode} search: {question}")
 
         # Route to appropriate search method based on search_mode
         if search_mode == "semantic":
@@ -141,14 +155,14 @@ class RAGSystem:
         }
 
         if not context:
-            print("No relevant context found")  # RAG-level decision
+            logger.warning("No relevant context found")  # RAG-level decision
             result["response"] = "I couldn't find any relevant information to answer your question."
             return result
 
-        print(f"Found {len(context)} relevant chunks")  # RAG-level result
+        logger.debug(f"Found {len(context)} relevant chunks")  # RAG-level result
 
         # Generate response
-        print("Generating response...")
+        logger.debug("Generating response...")
         messages = format_rag_prompt(question, context)
         result["response"] = self.llm_service.generate_response(messages)
 
@@ -199,7 +213,7 @@ class RAGSystem:
             List of semantically similar chunks with metadata
         """
         query_embedding = self.get_query_embedding(query)
-        print("Performing semantic search...")
+        logger.debug("Performing semantic search...")
         return self.vector_store.semantic_search(
             query_embedding=query_embedding, k=k, threshold=threshold
         )
@@ -215,7 +229,7 @@ class RAGSystem:
         Returns:
             List of matching chunks with metadata and text search rank
         """
-        print("Performing keyword search...")
+        logger.debug("Performing keyword search...")
         return self.vector_store.keyword_search(query=query, k=k)
 
     def hybrid_search(
@@ -234,7 +248,7 @@ class RAGSystem:
             List of chunks ranked by fused score
         """
         query_embedding = self.get_query_embedding(query)
-        print(f"Performing hybrid search (α={alpha:.1f})...")
+        logger.debug(f"Performing hybrid search (α={alpha:.1f})...")
 
         # Get more results from each method for better fusion
         search_k = k * 3
@@ -249,6 +263,10 @@ class RAGSystem:
 
         # Apply RRF fusion
         fused_results = self._apply_rrf_fusion(semantic_results, keyword_results, search_k, alpha)
+
+        logger.debug(f"🔀 Semantic: {len(semantic_results)} chunks")
+        logger.debug(f"🔀 Keyword: {len(keyword_results)} chunks")
+        logger.debug(f"🎯 Fused {len(fused_results)} chunks")
 
         # Return top k results
         return fused_results[:k]
