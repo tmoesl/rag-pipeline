@@ -7,7 +7,7 @@ from docling.document_converter import DocumentConverter
 from docling_core.transforms.chunker.hybrid_chunker import HybridChunker
 from docling_core.transforms.chunker.tokenizer.openai import OpenAITokenizer
 
-from rag.config.settings import EMBEDDING_MAX_TOKENS, EMBEDDING_MODEL
+from rag.config.settings import get_settings
 
 
 class DocumentProcessor:
@@ -16,9 +16,10 @@ class DocumentProcessor:
     def __init__(self):
         """Initialize the document processor with tokenizer and chunker."""
         # Set up tokenizer for chunking
-        tiktoken_encoder = tiktoken.encoding_for_model(EMBEDDING_MODEL)  # cl100k_base
+        settings = get_settings()
+        tiktoken_encoder = tiktoken.encoding_for_model(settings.embedding_model)  # cl100k_base
         self.tokenizer = OpenAITokenizer(
-            tokenizer=tiktoken_encoder, max_tokens=EMBEDDING_MAX_TOKENS
+            tokenizer=tiktoken_encoder, max_tokens=settings.embedding_max_tokens
         )
         self.chunker = HybridChunker(tokenizer=self.tokenizer)
         self.converter = DocumentConverter()

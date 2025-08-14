@@ -4,12 +4,7 @@ from typing import Any
 
 from openai import OpenAI
 
-from rag.config.settings import (
-    CHAT_MODEL,
-    MAX_OUTPUT_TOKENS,
-    OPENAI_API_KEY,
-    TEMPERATURE,
-)
+from rag.config.settings import get_settings
 
 
 class LLMService:
@@ -17,10 +12,11 @@ class LLMService:
 
     def __init__(self):
         """Initialize the LLM service with OpenAI client."""
-        self.client = OpenAI(api_key=OPENAI_API_KEY)
-        self.model = CHAT_MODEL
-        self.temperature = TEMPERATURE
-        self.max_output_tokens = MAX_OUTPUT_TOKENS
+        settings = get_settings()
+        self.client = OpenAI(api_key=settings.openai_api_key.get_secret_value())
+        self.model = settings.chat_model
+        self.temperature = settings.temperature
+        self.max_output_tokens = settings.max_output_tokens
 
     def generate_response(self, messages: list[dict[str, str]]) -> str:
         """
