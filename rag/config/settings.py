@@ -66,8 +66,3 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     """Get cached settings instance (singleton)."""
     return Settings()
-
-
-def get_psycopg_connection_string() -> str:
-    """Build psycopg3 connection string."""
-    return get_settings().database.conn_string
