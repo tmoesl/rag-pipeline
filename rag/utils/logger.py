@@ -33,7 +33,7 @@ def setup_logger() -> logging.Logger:
     logger.setLevel(getattr(logging, log_level, logging.INFO))
 
     # Create console handler with clean format
-    handler = logging.StreamHandler(sys.stdout)
+    handler = logging.StreamHandler(sys.stderr)
     formatter = logging.Formatter(
         "%(asctime)s | %(levelname)s | %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
     )
