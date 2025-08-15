@@ -8,6 +8,7 @@ from rag.core.document_processor import DocumentProcessor
 from rag.core.embedding_service import EmbeddingService
 from rag.core.llm_service import LLMService
 from rag.core.prompt_builder import format_rag_prompt
+from rag.core.reranker_service import RerankerService
 from rag.core.vector_store import VectorStore
 from rag.utils.logger import logger
 
@@ -26,6 +27,7 @@ class RAGSystem:
         self.document_processor = DocumentProcessor()
         self.embedding_service = EmbeddingService()
         self.llm_service = LLMService()
+        self.reranker_service = RerankerService()
 
         # In-memory cache for query embeddings
         self._query_embedding_cache: dict[str, list[float]] = {}
@@ -109,16 +111,18 @@ class RAGSystem:
         threshold: float | None = None,
         search_mode: str = "semantic",
         alpha: float | None = None,
+        use_reranking: bool = False,
     ) -> dict[str, Any]:
         """
         Main query method that combines retrieval and generation.
 
         Args:
             question: The user's question
-            k: Number of documents to retrieve
+            k: Number of documents to retrieve (final count for generation)
             threshold: Similarity threshold for semantic search
             search_mode: Search strategy ("semantic", "keyword", "hybrid")
             alpha: Weight for hybrid search (0.0 = pure keyword, 1.0 = pure semantic)
+            use_reranking: Whether to apply reranking to improve relevance
 
         Returns:
             Dictionary containing response, context, metadata, and search info
@@ -128,35 +132,46 @@ class RAGSystem:
         """
         # Set defaults from settings if not provided
         settings = get_settings()
-        k = k or settings.top_k_results
+        top_k = k or settings.top_k_results
         threshold = threshold or settings.semantic_threshold
         alpha = alpha or settings.hybrid_search_alpha
 
-        logger.debug(f"Processing query with {search_mode} search: {question}")
+        # Reranking expansion - fetch more documents if enabled
+        initial_k = settings.pre_rerank_target if use_reranking else top_k
 
-        # Route to appropriate search method based on search_mode
+        logger.debug(f"Processing query with {search_mode} search: {question}")
+        if use_reranking:
+            logger.debug(f"Reranking enabled: fetching {initial_k} docs, will rerank to {top_k}")
+
+        # Route to appropriate search method (receives initial_k)
         if search_mode == "semantic":
-            context = self.semantic_search(question, k, threshold)
+            context = self.semantic_search(question, initial_k, threshold)
         elif search_mode == "keyword":
-            context = self.keyword_search(question, k)
+            context = self.keyword_search(question, initial_k)
         elif search_mode == "hybrid":
-            context = self.hybrid_search(question, k, threshold, alpha)
+            context = self.hybrid_search(question, initial_k, threshold, alpha)
         else:
             raise ValueError(
                 f"Invalid search_mode: '{search_mode}'. "
                 f"Supported modes: 'semantic', 'keyword', 'hybrid'"
             )
 
+        # Apply reranking if enabled to get top_k results
+        if use_reranking and context:
+            logger.debug(f"Applying reranking: {len(context)} → {top_k}")
+            context = self.reranker_service.rerank_documents(question, context, top_k)
+        else:
+            logger.debug("Reranking disabled or no context available")
+
         # Base result template
         result = {
             "response": "",
             "context": context or [],
             "context_count": len(context) if context else 0,
-            "search_mode": search_mode,
             "search_params": {
-                "k": k,
-                "threshold": threshold if search_mode in ("semantic", "hybrid") else None,
-                "alpha": alpha if search_mode == "hybrid" else None,
+                "top_k": top_k,
+                "search_mode": search_mode,
+                "use_reranking": use_reranking,
             },
         }
 
@@ -256,19 +271,19 @@ class RAGSystem:
         query_embedding = self.get_query_embedding(query)
         logger.debug(f"Performing hybrid search (α={alpha:.1f})...")
 
-        # Get more results from each method for better fusion
-        search_k = k * 3
+        # Get more results from each method for better RRF fusion quality
+        fusion_k = max(k * 2, 30)  # Fixed expansion for fusion quality
 
         # Semantic search
         semantic_results = self.vector_store.semantic_search(
-            query_embedding=query_embedding, k=search_k, threshold=threshold
+            query_embedding=query_embedding, k=fusion_k, threshold=threshold
         )
 
         # Keyword search
-        keyword_results = self.vector_store.keyword_search(query=query, k=search_k)
+        keyword_results = self.vector_store.keyword_search(query=query, k=fusion_k)
 
         # Apply RRF fusion
-        fused_results = self._apply_rrf_fusion(semantic_results, keyword_results, search_k, alpha)
+        fused_results = self._apply_rrf_fusion(semantic_results, keyword_results, fusion_k, alpha)
 
         logger.debug(f"🔀 Semantic: {len(semantic_results)} chunks")
         logger.debug(f"🔀 Keyword: {len(keyword_results)} chunks")
