@@ -272,7 +272,8 @@ class RAGSystem:
         logger.debug(f"Performing hybrid search (α={alpha:.1f})...")
 
         # Get more results from each method for better RRF fusion quality
-        fusion_k = max(k * 2, 30)  # Fixed expansion for fusion quality
+        settings = get_settings()
+        fusion_k = max(k * 2, settings.min_fusion_target)
 
         # Semantic search
         semantic_results = self.vector_store.semantic_search(
