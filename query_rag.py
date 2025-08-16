@@ -7,40 +7,52 @@ from rag.rag_system import RAGSystem
 from rag.utils.logger import logger
 
 
-def display_chunks(context: list, search_mode: str, search_params: dict):
+def display_chunks(context: list, search_params: dict):
     """Display retrieved chunks with relevant metrics."""
-    alpha = search_params.get("alpha")
+    search_mode = search_params.get("search_mode", "unknown")
+    use_reranking = search_params.get("use_reranking", False)
 
-    print("\nRetrieved chunks:")
+    rerank_label = " + rerank" if use_reranking else ""
+    print(f"\nRetrieved chunks ({search_mode}{rerank_label}):")
+
     for i, doc in enumerate(context, 1):
         title = doc.get("title", "Unknown")
         idx = doc.get("chunk_index", i)
         meta = doc.get("metadata") or {}
         author = meta.get("author", "Unknown")
 
+        # Extract scores
         sim = doc.get("similarity")
         ts_rank = doc.get("rank")
         fusion = doc.get("fusion_score")
         s_rank = doc.get("semantic_rank")
         k_rank = doc.get("keyword_rank")
+        rerank_score = doc.get("rerank_score")
+        original_rank = doc.get("original_rank")
 
         parts: list[str] = []
-        if search_mode == "hybrid":
+
+        if use_reranking and rerank_score is not None:
+            # Reranking level - this is what matters now
+            if original_rank and original_rank != i:
+                direction = "↑" if original_rank > i else "↓"
+                parts.append(f"Rerank: {rerank_score:.3f} ({direction} from #{original_rank})")
+            elif original_rank and original_rank == i:
+                parts.append(f"Rerank: {rerank_score:.3f} (const)")
+            else:
+                parts.append(f"Rerank: {rerank_score:.3f}")
+        # Base search level scores
+        elif search_mode == "semantic" and sim is not None:
+            parts.append(f"Similarity: {sim:.3f}")
+        elif search_mode == "keyword" and ts_rank is not None:
+            parts.append(f"TS-Rank: {ts_rank:.4f}")
+        elif search_mode == "hybrid":
             if fusion is not None:
                 parts.append(f"Fusion: {fusion:.4f}")
-            parts.append(f"SemRank: {s_rank if s_rank is not None else '-'}")
-            parts.append(f"KeyRank: {k_rank if k_rank is not None else '-'}")
-            if sim is not None:
-                parts.append(f"Sim: {sim:.3f}")
-            if ts_rank is not None:
-                parts.append(f"TS-Rank: {ts_rank:.4f}")
-            if alpha is not None:
-                parts.append(f"alpha={alpha}")
-        elif search_mode == "semantic":
-            if sim is not None:
-                parts.append(f"Similarity: {sim:.3f}")
-        elif ts_rank is not None:
-            parts.append(f"TS-Rank: {ts_rank:.4f}")
+            if s_rank is not None:
+                parts.append(f"SemRank: {s_rank}")
+            if k_rank is not None:
+                parts.append(f"KeyRank: {k_rank}")
 
         extra = f", {', '.join(parts)}" if parts else ""
         print(f"{i}. {title} (Chunk {idx}{extra}, Author: {author})")
@@ -94,7 +106,7 @@ def main():
 
         try:
             # Query the system
-            result = rag.query(query)
+            result = rag.query(query, search_mode="hybrid", use_reranking=True)
 
             print("\nResponse:")
             print(result["response"])
@@ -104,9 +116,8 @@ def main():
                 continue
 
             if input("\nShow retrieved chunks? (y/n): ").strip().lower() == "y":
-                search_mode = result.get("search_mode", "")
                 search_params = result.get("search_params", {})
-                display_chunks(context, search_mode, search_params)
+                display_chunks(context, search_params)
         except Exception as e:
             logger.error(f"Error processing query: {e}")
 
