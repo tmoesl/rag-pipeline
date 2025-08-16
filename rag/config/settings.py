@@ -56,6 +56,11 @@ class Settings(BaseSettings):
     hybrid_search_alpha: float = Field(default=0.6, alias="HYBRID_SEARCH_ALPHA")
     keyword_search_enabled: bool = Field(default=True, alias="KEYWORD_SEARCH_ENABLED")
 
+    # Cohere reranking
+    cohere_api_key: SecretStr = Field(alias="COHERE_API_KEY")
+    rerank_model: str = Field(default="rerank-english-v3.0", alias="RERANK_MODEL")
+    pre_rerank_target: int = Field(default=20, alias="PRE_RERANK_TARGET")
+
     # Logging
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
 
@@ -65,4 +70,4 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     """Get cached settings instance (singleton)."""
-    return Settings()
+    return Settings()  # type: ignore
