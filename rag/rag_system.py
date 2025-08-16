@@ -272,7 +272,8 @@ class RAGSystem:
         logger.debug(f"Performing hybrid search (α={alpha:.1f})...")
 
         # Get more results from each method for better RRF fusion quality
-        fusion_k = max(k * 2, 30)  # Fixed expansion for fusion quality
+        settings = get_settings()
+        fusion_k = max(k * 2, settings.min_fusion_target)
 
         # Semantic search
         semantic_results = self.vector_store.semantic_search(
@@ -283,7 +284,7 @@ class RAGSystem:
         keyword_results = self.vector_store.keyword_search(query=query, k=fusion_k)
 
         # Apply RRF fusion
-        fused_results = self._apply_rrf_fusion(semantic_results, keyword_results, fusion_k, alpha)
+        fused_results = self._apply_rrf_fusion(semantic_results, keyword_results, alpha)
 
         logger.debug(f"🔀 Semantic: {len(semantic_results)} chunks")
         logger.debug(f"🔀 Keyword: {len(keyword_results)} chunks")
@@ -296,7 +297,6 @@ class RAGSystem:
         self,
         semantic_results: list[dict[str, Any]],
         keyword_results: list[dict[str, Any]],
-        search_k: int,
         alpha: float,
     ) -> list[dict[str, Any]]:
         """
@@ -305,7 +305,6 @@ class RAGSystem:
         Args:
             semantic_results: Results from semantic search
             keyword_results: Results from keyword search
-            search_k: Number of results fetched from each search (for fallback ranking)
             alpha: Weight for semantic vs keyword (0.0 = pure keyword, 1.0 = pure semantic)
 
         Returns:
@@ -316,7 +315,11 @@ class RAGSystem:
         semantic_ranks = {result["id"]: i + 1 for i, result in enumerate(semantic_results)}
         keyword_ranks = {result["id"]: i + 1 for i, result in enumerate(keyword_results)}
 
-        # Collect all unique chunks
+        # Cache result lengths for fallback ranks
+        semantic_len = len(semantic_results)
+        keyword_len = len(keyword_results)
+
+        # Collect all unique chunks [deduplication by id]
         all_chunks = {}
         for result in semantic_results:
             all_chunks[result["id"]] = result
@@ -327,10 +330,11 @@ class RAGSystem:
 
         # Apply Reciprocal Rank Fusion (RRF)
         fused_results = []
+
         for chunk_id, chunk in all_chunks.items():
-            # Get ranks (use search_k + 1 for items not found in that search type)
-            semantic_rank = semantic_ranks.get(chunk_id, search_k + 1)
-            keyword_rank = keyword_ranks.get(chunk_id, search_k + 1)
+            # Get ranks (use actual result count + 1 for items not found in that search type)
+            semantic_rank = semantic_ranks.get(chunk_id, semantic_len + 1)
+            keyword_rank = keyword_ranks.get(chunk_id, keyword_len + 1)
 
             # RRF formula with k=60 (standard value from literature)
             rrf_score = alpha * (1 / (semantic_rank + 60)) + (1 - alpha) * (1 / (keyword_rank + 60))
@@ -338,8 +342,8 @@ class RAGSystem:
             # Create result with fusion metadata
             chunk_copy = dict(chunk)
             chunk_copy["fusion_score"] = rrf_score
-            chunk_copy["semantic_rank"] = semantic_rank if semantic_rank <= search_k else None
-            chunk_copy["keyword_rank"] = keyword_rank if keyword_rank <= search_k else None
+            chunk_copy["semantic_rank"] = semantic_rank if semantic_rank <= semantic_len else None
+            chunk_copy["keyword_rank"] = keyword_rank if keyword_rank <= keyword_len else None
 
             fused_results.append(chunk_copy)
 

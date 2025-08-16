@@ -55,6 +55,7 @@ class Settings(BaseSettings):
     # Hybrid search
     hybrid_search_alpha: float = Field(default=0.6, alias="HYBRID_SEARCH_ALPHA")
     keyword_search_enabled: bool = Field(default=True, alias="KEYWORD_SEARCH_ENABLED")
+    min_fusion_target: int = Field(default=20, alias="MIN_FUSION_TARGET")
 
     # Cohere reranking
     cohere_api_key: SecretStr = Field(alias="COHERE_API_KEY")
