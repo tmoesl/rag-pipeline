@@ -8,6 +8,7 @@ from docling_core.transforms.chunker.hybrid_chunker import HybridChunker
 from docling_core.transforms.chunker.tokenizer.openai import OpenAITokenizer
 
 from rag.config.settings import get_settings
+from rag.core import RAGError
 
 
 class DocumentProcessor:
@@ -15,14 +16,17 @@ class DocumentProcessor:
 
     def __init__(self):
         """Initialize the document processor with tokenizer and chunker."""
-        # Set up tokenizer for chunking
-        settings = get_settings()
-        tiktoken_encoder = tiktoken.encoding_for_model(settings.embedding_model)  # cl100k_base
-        self.tokenizer = OpenAITokenizer(
-            tokenizer=tiktoken_encoder, max_tokens=settings.embedding_max_tokens
-        )
-        self.chunker = HybridChunker(tokenizer=self.tokenizer)
-        self.converter = DocumentConverter()
+        try:
+            # Set up tokenizer for chunking
+            settings = get_settings()
+            tiktoken_encoder = tiktoken.encoding_for_model(settings.embedding_model)  # cl100k_base
+            self.tokenizer = OpenAITokenizer(
+                tokenizer=tiktoken_encoder, max_tokens=settings.embedding_max_tokens
+            )
+            self.chunker = HybridChunker(tokenizer=self.tokenizer)
+            self.converter = DocumentConverter()
+        except Exception as e:
+            raise RAGError(f"Failed to initialize DocumentProcessor: {e}") from e
 
     def process_document(
         self, source: str, document_title: str | None = None

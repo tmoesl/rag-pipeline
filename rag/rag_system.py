@@ -3,7 +3,10 @@
 import warnings
 from typing import Any
 
+from pydantic import BaseModel
+
 from rag.config.settings import get_settings
+from rag.core import RAGError
 from rag.core.document_processor import DocumentProcessor
 from rag.core.embedding_service import EmbeddingService
 from rag.core.llm_service import LLMService
@@ -15,26 +18,49 @@ from rag.utils.logger import logger
 warnings.filterwarnings("ignore", message="'pin_memory' argument is set as true")
 
 
+class QueryResult(BaseModel):
+    """Successful result from RAG query operations."""
+
+    response: str
+    context: list[dict[str, Any]]
+    context_count: int
+    search_params: dict[str, Any]
+
+
+class QueryError(BaseModel):
+    """Error result from RAG query operations."""
+
+    error: str
+    message: str
+    search_params: dict[str, Any] | None = None
+
+
 class RAGSystem:
     """Main RAG system that orchestrates document ingestion, retrieval, and generation."""
 
     def __init__(self):
         """Initialize the RAG system with all pipeline components."""
-        # Create single VectorStore instance as source of truth
-        self.vector_store = VectorStore()
+        try:
+            # Create single VectorStore instance as source of truth
+            self.vector_store = VectorStore()
 
-        # Core services
-        self.document_processor = DocumentProcessor()
-        self.embedding_service = EmbeddingService()
-        self.llm_service = LLMService()
-        self.reranker_service = RerankerService()
+            # Core services
+            self.document_processor = DocumentProcessor()
+            self.embedding_service = EmbeddingService()
+            self.llm_service = LLMService()
+            self.reranker_service = RerankerService()
 
-        # In-memory cache for query embeddings
-        self._query_embedding_cache: dict[str, list[float]] = {}
+            # In-memory cache for query embeddings
+            self._query_embedding_cache: dict[str, list[float]] = {}
 
-        logger.info("RAG system initialized")
-        logger.info("Vector database connection established")
-        logger.info("In-memory query cache ready")
+            logger.debug(
+                "Core services: DocumentProcessor, EmbeddingService, LLMService, RerankerService"
+            )
+            logger.info("Core services initialized successfully")
+            logger.info("RAG system initialized")
+        except RAGError as e:
+            logger.exception(f"RAG system initialization failed: {e}")
+            raise
 
     def ingest_document(
         self, source: str, title: str | None = None, metadata: dict[str, Any] | None = None
@@ -96,7 +122,7 @@ class RAGSystem:
                 self.ingest_document(source=source, title=doc_title, metadata=doc_metadata)
                 processed += 1
             except Exception as e:
-                logger.error(f"Error processing {source}: {e}")
+                logger.exception(f"Error processing {source}: {e}")
                 continue
 
         logger.info(
@@ -112,7 +138,7 @@ class RAGSystem:
         search_mode: str = "semantic",
         alpha: float | None = None,
         use_reranking: bool = False,
-    ) -> dict[str, Any]:
+    ) -> QueryResult | QueryError:
         """
         Main query method that combines retrieval and generation.
 
@@ -125,69 +151,78 @@ class RAGSystem:
             use_reranking: Whether to apply reranking to improve relevance
 
         Returns:
-            Dictionary containing response, context, metadata, and search info
-
-        Raises:
-            ValueError: If search_mode is not one of the supported modes
+            QueryResult on success, QueryError on failure
         """
-        # Set defaults from settings if not provided
+        # Set defaults from settings
         settings = get_settings()
         top_k = k or settings.top_k_results
         threshold = threshold or settings.semantic_threshold
         alpha = alpha or settings.hybrid_search_alpha
-
-        # Reranking expansion - fetch more documents if enabled
         initial_k = settings.pre_rerank_target if use_reranking else top_k
 
-        logger.debug(f"Processing query with {search_mode} search: {question}")
-        if use_reranking:
-            logger.debug(f"Reranking enabled: fetching {initial_k} docs, will rerank to {top_k}")
+        logger.debug(f"Query: {search_mode} search, k={top_k}, rerank={use_reranking}")
 
-        # Route to appropriate search method (receives initial_k)
-        if search_mode == "semantic":
-            context = self.semantic_search(question, initial_k, threshold)
-        elif search_mode == "keyword":
-            context = self.keyword_search(question, initial_k)
-        elif search_mode == "hybrid":
-            context = self.hybrid_search(question, initial_k, threshold, alpha)
-        else:
-            raise ValueError(
-                f"Invalid search_mode: '{search_mode}'. "
-                f"Supported modes: 'semantic', 'keyword', 'hybrid'"
-            )
-
-        # Apply reranking if enabled to get top_k results
-        if use_reranking and context:
-            logger.debug(f"Applying reranking: {len(context)} → {top_k}")
-            context = self.reranker_service.rerank_documents(question, context, top_k)
-        else:
-            logger.debug("Reranking disabled or no context available")
-
-        # Base result template
-        result = {
-            "response": "",
-            "context": context or [],
-            "context_count": len(context) if context else 0,
-            "search_params": {
-                "top_k": top_k,
-                "search_mode": search_mode,
-                "use_reranking": use_reranking,
-            },
+        # Base result template for consistency
+        search_params = {
+            "top_k": top_k,
+            "search_mode": search_mode,
+            "use_reranking": use_reranking,
         }
 
-        if not context:
-            logger.warning("No relevant context found")  # RAG-level decision
-            result["response"] = "I couldn't find any relevant information to answer your question."
-            return result
+        try:
+            # Route to appropriate search method
+            if search_mode == "semantic":
+                context = self.semantic_search(question, initial_k, threshold)
+            elif search_mode == "keyword":
+                context = self.keyword_search(question, initial_k)
+            elif search_mode == "hybrid":
+                context = self.hybrid_search(question, initial_k, threshold, alpha)
+            else:
+                raise ValueError(
+                    f"Invalid search_mode: '{search_mode}'. "
+                    f"Supported modes: 'semantic', 'keyword', 'hybrid'"
+                )
 
-        logger.debug(f"Found {len(context)} relevant chunks")  # RAG-level result
+            # Apply reranking if enabled (has built-in fallback)
+            if use_reranking and context:
+                logger.debug(f"Applying reranking: {len(context)} → {top_k}")
+                context = self.reranker_service.rerank_documents(question, context, top_k)
 
-        # Generate response
-        logger.debug("Generating response...")
-        messages = format_rag_prompt(question, context)
-        result["response"] = self.llm_service.generate_response(messages)
+            # Handle no context found
+            if not context:
+                return QueryError(
+                    error="no_context",
+                    message="I couldn't find any relevant information to answer your question.",
+                    search_params=search_params,
+                )
 
-        return result
+            logger.debug(f"Found {len(context)} relevant chunks")
+
+            # Generate response
+            messages = format_rag_prompt(question, context)
+            response_text = self.llm_service.generate_response(messages)
+
+            return QueryResult(
+                response=response_text,
+                context=context,
+                context_count=len(context),
+                search_params=search_params,
+            )
+
+        except RAGError as e:
+            logger.exception(f"RAG operation failed: {e}")
+            return QueryError(
+                error="service_error",
+                message="I'm experiencing technical difficulties. Please try again.",
+                search_params=search_params,
+            )
+        except Exception as e:
+            logger.exception(f"Unexpected error: {e}")
+            return QueryError(
+                error="system_error",
+                message="An unexpected error occurred. Please try again.",
+                search_params=search_params,
+            )
 
     def get_stats(self) -> dict[str, Any]:
         """Get comprehensive statistics about the RAG system."""

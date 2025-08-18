@@ -5,6 +5,7 @@ from typing import Any
 import cohere
 
 from rag.config.settings import get_settings
+from rag.core import RAGError
 from rag.utils.logger import logger
 
 
@@ -13,9 +14,12 @@ class RerankerService:
 
     def __init__(self):
         """Initialize the re-ranking service with Cohere."""
-        settings = get_settings()
-        self.client = cohere.ClientV2(api_key=settings.cohere_api_key.get_secret_value())
-        self.model = settings.rerank_model
+        try:
+            settings = get_settings()
+            self.client = cohere.ClientV2(api_key=settings.cohere_api_key.get_secret_value())
+            self.model = settings.rerank_model
+        except Exception as e:
+            raise RAGError(f"Failed to initialize RerankerService: {e}") from e
 
     def rerank_documents(
         self, query: str, documents: list[dict[str, Any]], top_k: int
@@ -59,8 +63,5 @@ class RerankerService:
             return reranked_docs
 
         except Exception as e:
-            logger.error(f"Reranking failed: {e}")
-
-            # Fall back to original results (truncated to top_k)
-            logger.warning("Falling back to original document order")
+            logger.warning(f"Reranker failed, falling back to original order: {e}")
             return documents[:top_k]
