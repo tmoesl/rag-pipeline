@@ -6,6 +6,7 @@ from openai import OpenAI
 from tqdm import tqdm
 
 from rag.config.settings import get_settings
+from rag.core import RAGError
 
 
 class EmbeddingService:
@@ -13,10 +14,13 @@ class EmbeddingService:
 
     def __init__(self):
         """Initialize the embedding service with OpenAI client."""
-        settings = get_settings()
-        self.client = OpenAI(api_key=settings.openai_api_key.get_secret_value())
-        self.model = settings.embedding_model
-        self.dimensions = settings.embedding_dimensions
+        try:
+            settings = get_settings()
+            self.client = OpenAI(api_key=settings.openai_api_key.get_secret_value())
+            self.model = settings.embedding_model
+            self.dimensions = settings.embedding_dimensions
+        except Exception as e:
+            raise RAGError(f"Failed to initialize EmbeddingService: {e}") from e
 
     def create_embedding(self, text: str) -> list[float]:
         """
@@ -27,11 +31,17 @@ class EmbeddingService:
 
         Returns:
             List of embedding values
+
+        Raises:
+            RAGError: If the embedding API call fails
         """
-        response = self.client.embeddings.create(
-            model=self.model, input=text, dimensions=self.dimensions
-        )
-        return response.data[0].embedding
+        try:
+            response = self.client.embeddings.create(
+                model=self.model, input=text, dimensions=self.dimensions
+            )
+            return response.data[0].embedding
+        except Exception as e:
+            raise RAGError(f"Embedding API failed with model {self.model}: {e}") from e
 
     def create_embeddings_batch(self, texts: list[str], batch_size: int = 100) -> list[list[float]]:
         """
@@ -43,6 +53,9 @@ class EmbeddingService:
 
         Returns:
             List of embedding vectors
+
+        Raises:
+            RAGError: If the embedding API call fails
         """
         all_embeddings = []
 
@@ -51,12 +64,14 @@ class EmbeddingService:
             for i in range(0, len(texts), batch_size):
                 batch = texts[i : i + batch_size]
 
-                response = self.client.embeddings.create(
-                    model=self.model, input=batch, dimensions=self.dimensions
-                )
-
-                embeddings = [item.embedding for item in response.data]
-                all_embeddings.extend(embeddings)
+                try:
+                    response = self.client.embeddings.create(
+                        model=self.model, input=batch, dimensions=self.dimensions
+                    )
+                    embeddings = [item.embedding for item in response.data]
+                    all_embeddings.extend(embeddings)
+                except Exception as e:
+                    raise RAGError(f"Embedding API failed with model {self.model}: {e}") from e
 
                 pbar.update(len(batch))
 

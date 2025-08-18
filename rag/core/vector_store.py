@@ -9,6 +9,7 @@ from psycopg import sql
 from psycopg.rows import dict_row
 
 from rag.config.settings import get_settings
+from rag.core import RAGError
 
 
 class VectorStore:
@@ -30,7 +31,7 @@ class VectorStore:
             register_vector(conn)
             return conn
         except Exception as e:
-            raise ConnectionError(f"Failed to connect to database: {e}") from e
+            raise RAGError(f"Database connection failed: {e}") from e
 
     def add_document_with_chunks(
         self,
@@ -50,42 +51,48 @@ class VectorStore:
 
         Returns:
             Document ID
-        """
-        with self.conn.cursor() as cur:
-            # Insert document
-            result = cur.execute(
-                sql.SQL(
-                    """
-                    INSERT INTO {}.documents (title, source, metadata) 
-                    VALUES (%s, %s, %s) 
-                    RETURNING id
-                    """
-                ).format(sql.Identifier(self.schema)),
-                (title, source, json.dumps(metadata or {})),
-            )
-            document_id = result.fetchone()[0]  # type: ignore
 
-            # Insert chunks
-            for chunk in chunks:
-                cur.execute(
+        Raises:
+            RAGError: If database insertion fails
+        """
+        try:
+            with self.conn.cursor() as cur:
+                # Insert document
+                result = cur.execute(
                     sql.SQL(
                         """
-                        INSERT INTO {}.chunks 
-                        (document_id, content, chunk_index, metadata, embedding)
-                        VALUES (%s, %s, %s, %s, %s)
+                        INSERT INTO {}.documents (title, source, metadata) 
+                        VALUES (%s, %s, %s) 
+                        RETURNING id
                         """
                     ).format(sql.Identifier(self.schema)),
-                    (
-                        document_id,
-                        chunk["content"],
-                        chunk["metadata"]["chunk_index"],
-                        json.dumps(chunk["metadata"]),
-                        chunk["embedding"],
-                    ),
+                    (title, source, json.dumps(metadata or {})),
                 )
+                document_id = result.fetchone()[0]  # type: ignore
 
-            self.conn.commit()
-            return document_id
+                # Insert chunks
+                for chunk in chunks:
+                    cur.execute(
+                        sql.SQL(
+                            """
+                            INSERT INTO {}.chunks 
+                            (document_id, content, chunk_index, metadata, embedding)
+                            VALUES (%s, %s, %s, %s, %s)
+                            """
+                        ).format(sql.Identifier(self.schema)),
+                        (
+                            document_id,
+                            chunk["content"],
+                            chunk["metadata"]["chunk_index"],
+                            json.dumps(chunk["metadata"]),
+                            chunk["embedding"],
+                        ),
+                    )
+
+                self.conn.commit()
+                return document_id
+        except Exception as e:
+            raise RAGError(f"Database insertion failed: {e}") from e
 
     def get_existing_sources(self, sources: list[str]) -> set[str]:
         """
@@ -125,45 +132,54 @@ class VectorStore:
 
         Returns:
             List of semantically similar chunks with metadata
+
+        Raises:
+            RAGError: If the database search fails
         """
-        with self.conn.cursor(row_factory=dict_row) as cur:
-            # Base query with similarity score using inner product
-            base_query = sql.SQL("""
-                SELECT
-                    c.id,
-                    c.content,
-                    c.chunk_index,
-                    c.metadata,
-                    d.title,
-                    d.source,
-                    d.metadata as doc_metadata,
-                    -(c.embedding <#> %s::vector) as similarity,
-                    c.created_at
-                FROM {}.chunks c
-                JOIN {}.documents d ON c.document_id = d.id
-            """).format(sql.Identifier(self.schema), sql.Identifier(self.schema))
+        try:
+            with self.conn.cursor(row_factory=dict_row) as cur:
+                # Base query with similarity score using inner product
+                base_query = sql.SQL("""
+                    SELECT
+                        c.id,
+                        c.content,
+                        c.chunk_index,
+                        c.metadata,
+                        d.title,
+                        d.source,
+                        d.metadata as doc_metadata,
+                        -(c.embedding <#> %s::vector) as similarity,
+                        c.created_at
+                    FROM {}.chunks c
+                    JOIN {}.documents d ON c.document_id = d.id
+                """).format(sql.Identifier(self.schema), sql.Identifier(self.schema))
 
-            # Add threshold filter if specified
-            if threshold is not None:
-                where_clause = sql.SQL(" WHERE -(c.embedding <#> %s::vector) >= ") + sql.Literal(
-                    threshold
-                )
-                order_clause = sql.SQL(" ORDER BY c.embedding <#> %s::vector LIMIT %s")
-                query = base_query + where_clause + order_clause
-                result = cur.execute(query, (query_embedding, query_embedding, query_embedding, k))
-            else:
-                query = base_query + sql.SQL(" ORDER BY c.embedding <#> %s::vector LIMIT %s")
-                result = cur.execute(query, (query_embedding, query_embedding, k))
+                # Add threshold filter if specified
+                if threshold is not None:
+                    where_clause = sql.SQL(
+                        " WHERE -(c.embedding <#> %s::vector) >= "
+                    ) + sql.Literal(threshold)
+                    order_clause = sql.SQL(" ORDER BY c.embedding <#> %s::vector LIMIT %s")
+                    query = base_query + where_clause + order_clause
+                    result = cur.execute(
+                        query, (query_embedding, query_embedding, query_embedding, k)
+                    )
+                else:
+                    query = base_query + sql.SQL(" ORDER BY c.embedding <#> %s::vector LIMIT %s")
+                    result = cur.execute(query, (query_embedding, query_embedding, k))
 
-            # Extract results (rows) as dicts
-            results = [dict(r) for r in result.fetchall()]
+                # Extract results (rows) as dicts
+                results = [dict(r) for r in result.fetchall()]
 
-            # Merge doc_metadata into metadata for easier access, remove doc_metadata
-            for row in results:
-                row["metadata"] = (row.get("metadata") or {}) | (row.get("doc_metadata") or {})
-                row.pop("doc_metadata", None)
+                # Merge doc_metadata into metadata for easier access, remove doc_metadata
+                for row in results:
+                    row["metadata"] = (row.get("metadata") or {}) | (row.get("doc_metadata") or {})
+                    row.pop("doc_metadata", None)
 
-            return results
+                return results
+
+        except Exception as e:
+            raise RAGError(f"Semantic search failed: {e}") from e
 
     def keyword_search(self, query: str, k: int = 5) -> list[dict[str, Any]]:
         """
@@ -175,37 +191,43 @@ class VectorStore:
 
         Returns:
             List of matching chunks with metadata and text search rank
+
+        Raises:
+            RAGError: If the database search fails
         """
-        with self.conn.cursor(row_factory=dict_row) as cur:
-            query_sql = sql.SQL("""
-                SELECT
-                    c.id,
-                    c.content,
-                    c.chunk_index,
-                    c.metadata,
-                    d.title,
-                    d.source,
-                    d.metadata as doc_metadata,
-                    ts_rank(c.fts, plainto_tsquery('english', %s)) as rank,
-                    c.created_at
-                FROM {}.chunks c
-                JOIN {}.documents d ON c.document_id = d.id
-                WHERE c.fts @@ plainto_tsquery('english', %s)
-                ORDER BY ts_rank(c.fts, plainto_tsquery('english', %s)) DESC
-                LIMIT %s
-            """).format(sql.Identifier(self.schema), sql.Identifier(self.schema))
+        try:
+            with self.conn.cursor(row_factory=dict_row) as cur:
+                query_sql = sql.SQL("""
+                    SELECT
+                        c.id,
+                        c.content,
+                        c.chunk_index,
+                        c.metadata,
+                        d.title,
+                        d.source,
+                        d.metadata as doc_metadata,
+                        ts_rank(c.fts, plainto_tsquery('english', %s)) as rank,
+                        c.created_at
+                    FROM {}.chunks c
+                    JOIN {}.documents d ON c.document_id = d.id
+                    WHERE c.fts @@ plainto_tsquery('english', %s)
+                    ORDER BY ts_rank(c.fts, plainto_tsquery('english', %s)) DESC
+                    LIMIT %s
+                """).format(sql.Identifier(self.schema), sql.Identifier(self.schema))
 
-            result = cur.execute(query_sql, (query, query, query, k))
+                result = cur.execute(query_sql, (query, query, query, k))
 
-            # Extract results (rows) as dicts
-            results = [dict(r) for r in result.fetchall()]
+                # Extract results (rows) as dicts
+                results = [dict(r) for r in result.fetchall()]
 
-            # Merge doc_metadata into metadata for easier access, remove doc_metadata
-            for row in results:
-                row["metadata"] = (row.get("metadata") or {}) | (row.get("doc_metadata") or {})
-                row.pop("doc_metadata", None)
+                # Merge doc_metadata into metadata for easier access, remove doc_metadata
+                for row in results:
+                    row["metadata"] = (row.get("metadata") or {}) | (row.get("doc_metadata") or {})
+                    row.pop("doc_metadata", None)
 
-            return results
+                return results
+        except Exception as e:
+            raise RAGError(f"Keyword search failed: {e}") from e
 
     def get_document_count(self) -> int:
         """Get the total number of documents in the store."""

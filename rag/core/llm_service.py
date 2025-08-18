@@ -5,6 +5,7 @@ from typing import Any
 from openai import OpenAI
 
 from rag.config.settings import get_settings
+from rag.core import RAGError
 
 
 class LLMService:
@@ -12,11 +13,14 @@ class LLMService:
 
     def __init__(self):
         """Initialize the LLM service with OpenAI client."""
-        settings = get_settings()
-        self.client = OpenAI(api_key=settings.openai_api_key.get_secret_value())
-        self.model = settings.chat_model
-        self.temperature = settings.temperature
-        self.max_output_tokens = settings.max_output_tokens
+        try:
+            settings = get_settings()
+            self.client = OpenAI(api_key=settings.openai_api_key.get_secret_value())
+            self.model = settings.chat_model
+            self.temperature = settings.temperature
+            self.max_output_tokens = settings.max_output_tokens
+        except Exception as e:
+            raise RAGError(f"Failed to initialize LLMService: {e}") from e
 
     def generate_response(self, messages: list[dict[str, str]]) -> str:
         """
@@ -29,7 +33,7 @@ class LLMService:
             Generated text response
 
         Raises:
-            Exception: If the API call fails
+            RAGError: If the API call fails
         """
         try:
             response = self.client.responses.create(
@@ -39,9 +43,8 @@ class LLMService:
                 max_output_tokens=self.max_output_tokens,
             )
             return response.output_text
-        except Exception:
-            # Fallback to a basic response if API call fails
-            return "I encountered an error while processing your request. Please try again."
+        except Exception as e:
+            raise RAGError(f"LLM API failed with model {self.model}: {e}") from e
 
     def get_stats(self) -> dict[str, Any]:
         """Get LLM service statistics."""
